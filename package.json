@@ -1,0 +1,53 @@
+{
+  "name": "cvs_api",
+  "version": "0.0.1",
+  "description": "Webservice from CSV",
+  "main": "index.js",
+  "dependencies": {
+    "bluebird": "^3.4.6",
+    "csv": "^1.1.0",
+    "csv-parse": "^1.1.7",
+    "csv-parser": "^1.11.0",
+    "ejs": "^2.5.2",
+    "event-stream": "^3.3.4",
+    "express": "^4.14.0",
+    "iconv-lite": "^0.4.15",
+    "joi": "^10.0.1",
+    "lodash": "^4.17.2",
+    "mongodb": "^2.2.11",
+    "mongoose": "^4.6.8",
+    "mongoskin": "^2.1.0",
+    "request": "^2.78.0",
+    "snappy": "^5.0.5"
+  },
+  "author": "Thierry Delbart <thierry@thde.pro>",
+  "license": "MIT",
+  "devDependencies": {
+    "chai": "^3.5.0",
+    "mocha": "^3.1.2",
+    "mongo-in-memory": "0.0.5",
+    "supertest": "^2.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "scripts": {
+    "start": "node index.js",
+    "sync": "node sync.js",
+    "test": "NODE_ENV=test mocha -b"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "webservice",
+    "api",
+    "opendata",
+    "json",
+    "csv"
+  ],
+  "engines": {
+    "node": "=8.x",
+    "npm": ">= 3"
+  }
+}
