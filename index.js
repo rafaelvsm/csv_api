@@ -20,154 +20,196 @@ app.set('view engine', 'ejs');
 const request = require('request');
 const base_json = process.env.BASE_JSON || config.base_json;
 if ( base_json ) {
-  try {
+    try {
 
-    request(base_json, function (error, response, body) {
-      if (!error && response.statusCode == 200) {
-        config.base = JSON.parse(body);
-      } else {
-        console.log(error,response);
-      }
-    });
+        request(base_json, function (error, response, body) {
+            if (!error && response.statusCode == 200) {
+                config.base = JSON.parse(body);
+            } else {
+                console.log(error,response);
+            }
+        });
 
-  } catch (err) {
-    console.log(err);
-  }
+    } catch (err) {
+        console.log(err);
+    }
 }
 
 app.get('/', (req, res) => {
-  res.render('pages/index', {
-    base: config.base,
-    csv_portal: config.csv_portal,
-    domain: `${req.protocol}://${req.get('host')}`
-  });
+    res.render('pages/index', {
+        base: config.base,
+        csv_portal: config.csv_portal,
+        domain: `${req.protocol}://${req.get('host')}`
+    });
 });
 
 const baseSchemaValidator = (base) => {
-  const baseSchema = joi.object().keys({
-    name: joi.string().required(),
-    description: joi.string().required(),
-    csv: joi.array().items({
-      slug: joi.string().required(),
-      name: joi.string().required(),
-      url: joi.string().required(),
-      docs: joi.object().keys({
-        example_find_item: joi.string().optional(),
-        example_find_items: joi.string().optional(),
-        example_field_values: joi.string().optional()
-      })
-    })
-  });
+    const baseSchema = joi.object().keys({
+        name: joi.string().required(),
+        description: joi.string().required(),
+        csv: joi.array().items({
+            slug: joi.string().required(),
+            name: joi.string().required(),
+            url: joi.string().required(),
+            docs: joi.object().keys({
+                example_find_item: joi.string().optional(),
+                example_find_items: joi.string().optional(),
+                example_field_values: joi.string().optional()
+            })
+        })
+    });
 
-  const validate = Promise.promisify(joi.validate);
-  return validate(base, baseSchema);
+    const validate = Promise.promisify(joi.validate);
+    return validate(base, baseSchema);
 }
 
 const validateBases = (bases) => {
-  return (validator) => {
-    return Promise.map(bases, base => {
-      return validator(base);
-    }).then(_result => true);
-  }
+    return (validator) => {
+        return Promise.map(bases, base => {
+            return validator(base);
+        }).then(_result => true);
+    }
 };
 
 app.get('/:slug', (req, res) => {
-  res.json(config.base);
+    res.json(config.base);
 });
 
 app.get('/:slug/item', (req, res) => {
-  const find = (req.query.find) ? JSON.parse(req.query.find) : {};
-  find['base'] = req.params.slug;
+    const find = (req.query.find) ? JSONParse(req.query.find) : {};
+    find['base'] = req.params.slug;
 
-  ItemModel.findOne(find)
-    .then(result => {
-      if (!result) return res.json({});
-      res.json(result);
-    })
-    .catch(err => {
-      console.error(`Error on ${req.path}, err: ${err}`);
-      res.status(500).end();
-    });
+    ItemModel.findOne(find)
+        .then(result => {
+            if (!result) return res.json({});
+            res.json(result);
+        })
+        .catch(err => {
+            console.error(`Error on ${req.path}, err: ${err}`);
+            res.status(500).end();
+        });
 });
 
 app.get('/:slug/items', (req, res) => {
-  const find = (req.query.find) ? JSON.parse(req.query.find) : {};
-  find['base'] = req.params.slug;
-  
-  const options = { 'limit': 30 };
-  if (req.query.limit) options['limit'] = 1 * req.query.limit;  
-  if (req.query.sort) options['sort'] = JSON.parse(req.query.sort);  
-  if (req.query.skip)  options['skip']  = parseFloat(req.query.skip);
+    const find = (req.query.find) ? JSONParse(req.query.find) : {};
+    find['base'] = req.params.slug;
 
-  ItemModel.find(find, {}, options) 
-    .then(results => {
-      if (!results.length) return res.json([]);
-      res.json(results);
+    const options = { 'limit': 30 };
+    if (req.query.limit) options['limit'] = 1 * req.query.limit;
+    if (req.query.skip) options['skip'] = parseFloat(req.query.skip);
+    if (req.query.sort) options['sort'] = JSON.parse(req.query.sort);
+
+    ItemModel.find(find, {}, options)
+        .then(results => {
+            if (!results.length) return res.json([]);
+            res.json(results);
+        })
+        .catch(err => {
+            console.error(`Error on ${req.path}, err: ${err}`);
+            res.status(500).end();
+        });
+});
+
+app.get('/:slug/group', (req, res) => {
+    const find = (req.query.find) ? JSONParse(req.query.find) : {};
+    const group = (req.query.group) ? JSON.parse(req.query.group) : {};
+    find['base'] = req.params.slug;
+    const sum = (req.query.sum) ? '$' + req.query.sum : '';
+    const sort = (req.query.sort) ? JSON.parse(req.query.sort) : { _id: -1 };
+
+    ItemModel.aggregate([
+        { $match: find },
+        {
+            $group: {
+                _id: group,
+                sum: { $sum: sum },
+                count: { $sum: 1 }
+            }
+        },
+        { $sort: sort }
+    ]).then(results => {
+        if (!results.length) return res.json([]);
+        res.json(results);
     })
-    .catch(err => {
-      console.error(`Error on ${req.path}, err: ${err}`);
-      res.status(500).end();
-    });
+        .catch(err => {
+            console.error(`Error on ${req.path}, err: ${err}`);
+            res.status(500).end();
+        });
+    //[ { 'NM_EMPRESA': 'Prefeitura Mun. de Curitiba', 'DESC_FONTE': 'Recursos da União', count: 12, 'VL_RECEITA': 130200}]
 });
 
 app.get('/:slug/fields', (req, res) => {
-  const find = {};
-  find['slug'] = req.params.slug;
+    const find = {};
+    find['slug'] = req.params.slug;
 
-  CSVModel.findOne(find)
-    .then(result => res.json(result.fields))
-    .catch(err => {
-      console.error(`Error on ${req.path}, err: ${err}`);
-      res.status(500).end();
-    });
+    CSVModel.findOne(find)
+        .then(result => res.json(result.fields))
+        .catch(err => {
+            console.error(`Error on ${req.path}, err: ${err}`);
+            res.status(500).end();
+        });
 });
 
 app.get('/:slug/:field', (req, res) => {
-  ItemModel.aggregate([
-    { '$group': { '_id': '$' + req.params.field } },
-    { '$limit': 200 }
-  ], function (err, results) {
-    if (err) {
-      res.json(false);
-    } else {
-      const values = [];
-      for (let i = results.length - 1; i >= 0; i--) {
-        values.push(results[i]['_id']);
-      };
-      res.json(values);
-    }
-  });
+    ItemModel.aggregate([
+        { '$group': { '_id': '$' + req.params.field } },
+        { '$limit': 200 }
+    ], function (err, results) {
+        if (err) {
+            res.json(false);
+        } else {
+            const values = [];
+            for (let i = results.length - 1; i >= 0; i--) {
+                values.push(results[i]['_id']);
+            };
+            res.json(values);
+        }
+    });
 });
 
 app.get('/:slug/widget', (req, res) => {
-  ItemModel.aggregate([
-    { '$group': { '_id': '$' + req.params.field } },
-    { '$limit': 200 }
-  ], function (err, results) {
-    if (err) {
-      res.json(false);
-    } else {
-      const values = [];
-      for (let i = results.length - 1; i >= 0; i--) {
-        values.push(results[i]['_id']);
-      };
-      res.json(values);
-    }
-  });
+    ItemModel.aggregate([
+        { '$group': { '_id': '$' + req.params.field } },
+        { '$limit': 200 }
+    ], function (err, results) {
+        if (err) {
+            res.json(false);
+        } else {
+            const values = [];
+            for (let i = results.length - 1; i >= 0; i--) {
+                values.push(results[i]['_id']);
+            };
+            res.json(values);
+        }
+    });
 });
 
 
 validateBases([config.base])(baseSchemaValidator)
-  .then(() => {
-    if (env !== 'test') {
-      const port = process.env.PORT || config.port || 8080; // set our port
-      app.listen(port, err => {
-        if (err) return console.error(`Ops ${err}`);
-        console.log('Magic happens on port ' + port);
-      });
-    } else {
-      console.log('test mode');
+    .then(() => {
+        if (env !== 'test') {
+            const port = process.env.PORT || config.port || 8080; // set our port
+            app.listen(port, err => {
+                if (err) return console.error(`Ops ${err}`);
+                console.log('Magic happens on port ' + port);
+            });
+        } else {
+            console.log('test mode');
+        }
+    }).catch(err => {
+        console.error(err.toString());
+    });
+
+function JSONParse(obj) {
+    var obj = JSON.parse(obj);
+    return ConvertDates(obj);
+}
+function ConvertDates(obj) {
+    for (var prop in obj) {
+        if ((new Date(obj[prop]) !== "Invalid Date") && !isNaN(new Date(obj[prop])))
+            obj[prop] = new Date(obj[prop]);
+        else if (typeof obj[prop] === 'object')
+            obj[prop] = ConvertDates(obj[prop]);
     }
-  }).catch(err => {
-    console.error(err.toString());
-  });
+    return obj;
+}
